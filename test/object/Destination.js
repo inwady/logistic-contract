@@ -1,4 +1,3 @@
-
 class Destination {
     constructor(companyContract, cost, secret, secretOfDocument) {
         this.companyContract = companyContract;
@@ -12,4 +11,6 @@ class Destination {
     }
 }
 
-export default Destination;
+const destinationCountArguments = 4;
+
+export { Destination, destinationCountArguments };

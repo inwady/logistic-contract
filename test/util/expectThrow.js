@@ -21,7 +21,7 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-module.exports = async promise => {
+module.exports = async (promise, message)=> {
     try {
         await promise;
     } catch (error) {
@@ -41,5 +41,5 @@ module.exports = async promise => {
         return;
     }
 
-    assert.fail('Expected throw not received');
+    assert.fail(`Expected throw not received, message ${message || 'no'}`);
 };

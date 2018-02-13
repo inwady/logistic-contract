@@ -10,8 +10,6 @@ class CompanyContract extends Contract {
     }
 
     async initContract() {
-        console.log(this.name);
-        console.log(this.fromAccount);
         this.contract = await Company.new(this.name, {from: this.fromAccount});
     }
 

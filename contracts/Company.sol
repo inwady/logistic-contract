@@ -11,6 +11,7 @@ contract Company is OwnerOfValidators {
 
     function payForTransfer() external payable {
         require(msg.value > 0);
+        require(ourValidators[tx.origin]);
 
         // ourValidators[msg.sender].transfer(1);
         PayValidator(msg.sender);

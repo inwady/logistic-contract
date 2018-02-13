@@ -1,17 +1,20 @@
 import Contract from './Contract';
 import { assertEvents } from '../util/assert';
+import { destinationCountArguments } from '../object/Destination';
 
 let Logistic = artifacts.require("Logistic");
 
 function parseDestination(arrayDestination) {
-    if (arrayDestination.length <= 0)
-        throw "bad array destination";
-
-    result = null;
+    let result = Array.from({length: destinationCountArguments}, () => []);
     arrayDestination.forEach((v) => {
         let data = v.toArray();
-        (result || Array(data.length).fill([])).forEach((ar, i) => ar.push(data[i]));
+
+        result.forEach((ar, i) => {
+            ar.push(data[i])
+        });
     });
+
+    return result;
 }
 
 class LogisticContract extends Contract {
@@ -20,22 +23,31 @@ class LogisticContract extends Contract {
         this.destinations = destinationArray;
     }
 
-    async initContract() {
-        resultForSolidity = parseDestination(this.destinations);
-        this.contract = await Logistic.new(...resultForSolidity, {from: this.fromAccount});
+    async initContract(value) {
+        let resultForSolidity = parseDestination(this.destinations);
+        this.contract = await Logistic.new(...resultForSolidity, {
+            from: this.fromAccount,
+            value: value,
+        });
     }
 
-    async getPath(pathId) {
-        let block = await contract.getPath(pathId, {from: role.some});
-        console.log("getPath gas: " + this._getGasUsed(block));
-        return block;
-    }
+    async validatorSend(validatorAddress, secret, finalFlag) {
+        finalFlag = finalFlag || false;
 
-    async validatorSend(validatorAddress, secret) {
         let block = await this.contract.validatorSend(secret, {from: validatorAddress});
-        assertEvents(block, "SuccessDestination");
+
+        let events = ["SuccessPath"];
+        if (finalFlag)
+            events.push("SuccessDestination");
+
+        assertEvents(block, ...events);
 
         return this._getGasUsed(block);
+    }
+
+    /* use view */
+    async getPath(someAddress, pathId) {
+        return await this.contract.getPath(pathId, {from: someAddress});
     }
 }
 

@@ -1,7 +1,11 @@
 import CompanyContract from './model/CompanyContract';
 import LogisticContract from './model/LogisticContract';
 
-import Destination from './object/Destination';
+import { getBigWeiBalance } from './util/util';
+import { Destination } from './object/Destination';
+
+let BigNumber = require('bignumber.js');
+let expectThrow = require('./util/expectThrow');
 
 // TODO getCreationTime
 
@@ -9,9 +13,16 @@ contract("Logistic", function(accounts) {
     const role = {
         sender: accounts[0],
         receiver: accounts[1],
+
+        /* train */
         trainCompany: accounts[2],
-        airCompany: accounts[3],
-        some: accounts[4]
+        trainValidator: accounts[3],
+
+        /* air */
+        airCompany: accounts[4],
+        airValidator: accounts[5],
+
+        some: accounts[6]
     };
 
     const secrets = {
@@ -22,28 +33,97 @@ contract("Logistic", function(accounts) {
         someHash: "0xa6b46dd0d1ae5e86cbc8f37e75ceeb6760230c1ca4ffbcb0c97b96dd7d9c464b"
     };
 
-    async function startCompanies() {
+    async function startCompaniesTrainAir() {
         let trainContract = new CompanyContract(role.trainCompany, "train");
         await trainContract.initContract();
+        await trainContract.addValidator(role.trainValidator);
 
         let airContract = new CompanyContract(role.airCompany, "air");
         await airContract.initContract();
+        await airContract.addValidator(role.airValidator);
 
         return [trainContract, airContract];
     }
 
     it("base smoke test", async function() {
-        console.log("!");
-        let companies = await startCompanies();
-        console.log("!");
-        let data = [
-            new Destination(companies[0], 10, secrets.secret1Hash, secrets.someHash),
-            new Destination(companies[1], 10, secrets.secret2Hash, secrets.someHash)
-        ];
-        console.log("!");
+        let companies = await startCompaniesTrainAir();
 
-        let logistic = new LogisticContract(role.sender, data);
-        console.log("!");
-        logistic.initContract();
+        let data = [
+            new Destination(companies[0].address, 10, secrets.secret1Hash, secrets.someHash),
+            new Destination(companies[1].address, 10, secrets.secret2Hash, secrets.someHash)
+        ];
+
+        let logisticContract = new LogisticContract(role.sender, data);
+        await logisticContract.initContract(20);
+
+        let checkPath = (path, destination) => {
+            destination.toArray().forEach((v, i) => assert.equal(v, path[i], `bad save path ${i} in contract`));
+        };
+
+        checkPath(await logisticContract.getPath(role.some, 0), data[0]);
+        checkPath(await logisticContract.getPath(role.some, 1), data[1]);
+
+        /* pass train */
+        await logisticContract.validatorSend(role.trainValidator, secrets.secret1);
+
+        /* pass air */
+        await logisticContract.validatorSend(role.airValidator, secrets.secret2, true);
+
+        /* bad */
+        await expectThrow(logisticContract.validatorSend(role.trainValidator, secrets.secret1));
+        await expectThrow(logisticContract.validatorSend(role.airValidator, secrets.secret2));
+    });
+
+    it("check bad path", async function() {
+        let logisticContract = new LogisticContract(role.sender, []);
+
+        /* cannot create contract */
+        await expectThrow(logisticContract.initContract(20));
+    });
+
+    it("bad validator or hash", async function () {
+        let trainContract = new CompanyContract(role.trainCompany, "train");
+        await trainContract.initContract();
+
+        await trainContract.addValidator(role.trainValidator);
+
+        let data = [ new Destination(trainContract.address, 10, secrets.secret1Hash, secrets.someHash) ];
+
+        let logisticContract = new LogisticContract(role.sender, data);
+        await logisticContract.initContract(10);
+
+        /* try bad validator */
+        await expectThrow(logisticContract.validatorSend(role.some, secrets.secret1));
+
+        /* try bad hash */
+        await expectThrow(logisticContract.validatorSend(role.trainValidator, secrets.secret2));
+    });
+
+    it("return money", async function() {
+        let data = [
+            new Destination(role.trainCompany, 10, secrets.secret1Hash, secrets.someHash),
+        ];
+
+        let amount, beforeAmount = await getBigWeiBalance(role.sender);
+        let logisticContract = new LogisticContract(role.sender, data);
+        await logisticContract.initContract(20);
+
+        amount = await getBigWeiBalance(role.sender);
+
+        assert.isOk(beforeAmount.minus(amount).minus(logisticContract.contractGasUsage).equals(10),
+            "bad contract, contract didn't return money");
+        assert.isOk((await logisticContract.getBigBalance()).equals(10),
+            "bad amount in contract");
+    });
+
+    it("pay not enough", async function() {
+        let data = [
+            new Destination(role.trainCompany, 10, secrets.secret1Hash, secrets.someHash),
+        ];
+
+        let amount, beforeAmount = await getBigWeiBalance(role.sender);
+        let logisticContract = new LogisticContract(role.sender, data);
+
+        await expectThrow(logisticContract.initContract(9));
     });
 });

@@ -11,6 +11,8 @@ contract OwnerOfValidators is Owner {
     }
 
     function removeValidator(address validator) public onlyOwner {
+        require(ourValidators[validator]);
+
         delete ourValidators[validator];
         RemoveValidator(validator);
     }
