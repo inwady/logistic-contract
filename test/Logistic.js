@@ -1,15 +1,14 @@
 import CompanyContract from './model/CompanyContract';
 import LogisticContract from './model/LogisticContract';
 
-import { getBigWeiBalance } from './util/util';
+import { getBigWeiBalance, etowei } from './util/util';
 import { Destination } from './object/Destination';
 
-let BigNumber = require('bignumber.js');
 let expectThrow = require('./util/expectThrow');
 
-// TODO getCreationTime
-
 contract("Logistic", function(accounts) {
+    let tests;
+
     const role = {
         sender: accounts[0],
         receiver: accounts[1],
@@ -45,6 +44,13 @@ contract("Logistic", function(accounts) {
         return [trainContract, airContract];
     }
 
+    async function startCompanyTrain() {
+        let trainContract = new CompanyContract(role.trainCompany, "train");
+        await trainContract.initContract();
+        await trainContract.addValidator(role.trainValidator);
+        return trainContract;
+    }
+
     it("base smoke test", async function() {
         let companies = await startCompaniesTrainAir();
 
@@ -56,8 +62,8 @@ contract("Logistic", function(accounts) {
         let logisticContract = new LogisticContract(role.sender, data);
         await logisticContract.initContract(20);
 
-        let checkPath = (path, destination) => {
-            destination.toArray().forEach((v, i) => assert.equal(v, path[i], `bad save path ${i} in contract`));
+        let checkPath = (path, destinations) => {
+            destinations.toArray().forEach((v, i) => assert.equal(v, path[i], `bad save path ${i} in contract`));
         };
 
         checkPath(await logisticContract.getPath(role.some, 0), data[0]);
@@ -99,9 +105,11 @@ contract("Logistic", function(accounts) {
         await expectThrow(logisticContract.validatorSend(role.trainValidator, secrets.secret2));
     });
 
-    it("return money", async function() {
+    it("return money if a lot", async function() {
+        let trainContract = startCompanyTrain();
+
         let data = [
-            new Destination(role.trainCompany, 10, secrets.secret1Hash, secrets.someHash),
+            new Destination(trainContract.address, 10, secrets.secret1Hash, secrets.someHash),
         ];
 
         let amount, beforeAmount = await getBigWeiBalance(role.sender);
@@ -116,9 +124,11 @@ contract("Logistic", function(accounts) {
             "bad amount in contract");
     });
 
-    it("pay not enough", async function() {
+    it("revert if not enough", async function() {
+        let trainContract = startCompanyTrain();
+
         let data = [
-            new Destination(role.trainCompany, 10, secrets.secret1Hash, secrets.someHash),
+            new Destination(trainContract.address, 10, secrets.secret1Hash, secrets.someHash),
         ];
 
         let amount, beforeAmount = await getBigWeiBalance(role.sender);
@@ -126,4 +136,36 @@ contract("Logistic", function(accounts) {
 
         await expectThrow(logisticContract.initContract(9));
     });
+
+    tests = [true, false];
+    tests.forEach(function(isExpire) {
+        it("return money if company was " + ((isExpire) ? "late" : "in time"), async function () {
+            let time = 1000; /* seconds */
+            let trainContract = await startCompanyTrain();
+
+            let data = [
+                new Destination(trainContract.address, 10, secrets.secret1Hash, secrets.someHash, time),
+            ];
+
+            let logisticContract = new LogisticContract(role.sender, data);
+            await logisticContract.initContract(10);
+
+            web3.currentProvider.send({
+                jsonrpc: "2.0",
+                method: "evm_increaseTime",
+                params: [(isExpire) ? time + 1 : time - 1],
+                id: 0
+            });
+
+            web3.currentProvider.send({jsonrpc: "2.0", method: "evm_mine", params: [], id: 0});
+
+            let promise = logisticContract.validatorSend(role.trainValidator, secrets.secret1, true);
+            if (!isExpire) {
+                await promise;
+            } else {
+                await expectThrow(promise);
+            }
+        });
+    });
+
 });

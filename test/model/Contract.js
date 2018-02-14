@@ -23,6 +23,10 @@ class Contract {
         return this.contract.address;
     }
 
+    getImplContract() {
+        return this.contract;
+    }
+
     get transaction() {
         return this.contract.transactionHash;
     }

@@ -1,21 +1,8 @@
 import Contract from './Contract';
 import { assertEvents } from '../util/assert';
-import { destinationCountArguments } from '../object/Destination';
+import { parseDestination } from '../object/Destination';
 
 let Logistic = artifacts.require("Logistic");
-
-function parseDestination(arrayDestination) {
-    let result = Array.from({length: destinationCountArguments}, () => []);
-    arrayDestination.forEach((v) => {
-        let data = v.toArray();
-
-        result.forEach((ar, i) => {
-            ar.push(data[i])
-        });
-    });
-
-    return result;
-}
 
 class LogisticContract extends Contract {
     constructor(fromAccount, destinationArray) {

@@ -13,8 +13,4 @@ contract Owner {
         require(msg.sender == owner);
         _;
     }
-
-    function getCreationTime() public view returns (uint) {
-        return creationTime;
-    }
 }
