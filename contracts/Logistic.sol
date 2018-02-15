@@ -7,8 +7,8 @@ contract Logistic is Owner {
     struct FinalDestination {
         address companyContract;
         uint cost;
-        bytes32 secret;
-        bytes32 secretOfDocument;
+        bytes32 hashOfSecret;
+        bytes32 hashOfTravelDocs;
         uint ttl;
     }
 
@@ -23,29 +23,34 @@ contract Logistic is Owner {
 
     function Logistic(address[] companyContract,
         uint[] cost,
-        bytes32[] secret,
-        bytes32[] secretOfDocument,
+        bytes32[] hashOfSecret,
+        bytes32[] hashOfTravelDocs,
         uint[] ttl) public payable {
 
         require(companyContract.length > 0);
         require(companyContract.length == cost.length);
-        require(companyContract.length == secret.length);
-        require(companyContract.length == secretOfDocument.length);
+        require(companyContract.length == hashOfSecret.length);
+        require(companyContract.length == hashOfTravelDocs.length);
+        require(companyContract.length == ttl.length);
 
         currentDestination = 0;
         lastTime = now;
 
-        uint finalCost = 0;
+        uint finalCost = 0; uint tempCost;
         for (uint i = 0; i < companyContract.length; i++) {
+            tempCost = finalCost;
             finalCost += cost[i];
+
+            /* Integer Overflow */
+            require(finalCost >= tempCost);
 
             basicPlaces.push(FinalDestination({
                 companyContract: companyContract[i],
                 cost: cost[i],
-                secret: secret[i],
-                secretOfDocument: secretOfDocument[i],
+                hashOfSecret: hashOfSecret[i],
+                hashOfTravelDocs: hashOfTravelDocs[i],
                 ttl: ttl[i]
-            }));
+                }));
         }
 
         require(msg.value >= finalCost);
@@ -61,15 +66,15 @@ contract Logistic is Owner {
     function getPath(uint pathId) public view returns (address, uint, bytes32, bytes32, uint) {
         require(pathId < basicPlaces.length);
         return (basicPlaces[pathId].companyContract,
-            basicPlaces[pathId].cost,
-            basicPlaces[pathId].secret,
-            basicPlaces[pathId].secretOfDocument,
-            basicPlaces[pathId].ttl);
+        basicPlaces[pathId].cost,
+        basicPlaces[pathId].hashOfSecret,
+        basicPlaces[pathId].hashOfTravelDocs,
+        basicPlaces[pathId].ttl);
     }
 
     function validatorSend(string secret) public active {
         FinalDestination memory dst = basicPlaces[currentDestination];
-        require(sha256(secret) == dst.secret);
+        require(sha256(secret) == dst.hashOfSecret);
         require(lastTime + dst.ttl >= now);
 
         currentDestination += 1;
